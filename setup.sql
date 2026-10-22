@@ -51,3 +51,30 @@ drop policy if exists "crew views photos"   on storage.objects;
 drop policy if exists "crew uploads photos" on storage.objects;
 create policy "crew views photos"   on storage.objects for select to authenticated using (bucket_id = 'photos' and public.is_crew());
 create policy "crew uploads photos" on storage.objects for insert to authenticated with check (bucket_id = 'photos' and public.is_crew());
+-- Benchmark Log: crew join code
+-- Change CHANGE-ME below to your crew's code, then Run. Run again any time to change the code.
+create table if not exists public.crew_settings (
+  id int primary key default 1 check (id = 1),
+  join_code text not null
+);
+alter table public.crew_settings enable row level security;  -- no one can read the code through the website
+insert into public.crew_settings (id, join_code) values (1, 'CHANGE-ME')
+  on conflict (id) do update set join_code = excluded.join_code;
+
+-- Adds the signed-in person to the crew when their code matches.
+create or replace function public.join_crew(code text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if auth.uid() is null then return false; end if;
+  select exists (select 1 from crew_settings where upper(trim(join_code)) = upper(trim(code))) into ok;
+  if ok then
+    insert into crew (email) values (lower(auth.jwt() ->> 'email')) on conflict do nothing;
+  else
+    perform pg_sleep(1);  -- slows down anyone guessing codes
+  end if;
+  return ok;
+end $$;
+revoke all on function public.join_crew(text) from public, anon;
+grant execute on function public.join_crew(text) to authenticated;
+grant execute on function public.is_crew() to authenticated;
