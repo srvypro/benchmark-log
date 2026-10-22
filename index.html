@@ -95,7 +95,7 @@ select.f{background:var(--surface);border:1px solid var(--line);border-radius:6p
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
 
 /* sheets */
-.scrim{position:fixed;inset:0;background:rgba(10,14,12,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.scrim{position:fixed;inset:0;background:rgba(10,14,12,.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--surface);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:14px 14px 0 0;
   padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));padding-top:16px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));
   display:flex;flex-direction:column;gap:14px}
@@ -121,7 +121,7 @@ label.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:
 label.fld input,label.fld select,label.fld textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 10px;font-size:15px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);width:100%}
 label.fld .hint{font-weight:400;text-transform:none;letter-spacing:0;font-size:12px}
 .err{color:var(--bad);font-size:13px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:6px;z-index:30;font-size:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:6px;z-index:2100;font-size:14px}
 /* 3d view */
 .v3d svg{cursor:grab;touch-action:pan-y}
 .v3d svg.drag{cursor:grabbing}
@@ -167,7 +167,8 @@ table.book{border-collapse:collapse;width:100%;min-width:520px;font-family:var(-
 .hdl{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid var(--accent);background:rgba(242,183,5,.25);touch-action:none;padding:0;cursor:grab}
 .hdl::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:var(--accent)}
 .hdl.on{background:rgba(242,183,5,.5);cursor:grabbing}
-#mapEl{height:min(62vh,560px);width:100%;background:var(--sunk)}
+#mapView{isolation:isolate;z-index:0}
+#mapEl{height:min(62vh,560px);width:100%;background:var(--sunk);z-index:0}
 .mk{position:relative}
 .mk svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .mk span{position:absolute;left:26px;top:-3px;white-space:nowrap;font-family:var(--mono);font-size:11px;font-weight:500;line-height:1.15;color:#18221d;background:rgba(255,255,255,.88);border-radius:3px;padding:1px 4px}
