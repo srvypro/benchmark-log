@@ -961,7 +961,7 @@ async function startBackend(){
   if(!configured()){MODE="local";BACKEND={db:makeLocalDB(),user:{id:async()=>"local",name:""},downloads:DOWNLOADS};return}
   SB=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
   const {data}=await SB.auth.getSession();SESSION=data.session;
-  SB.auth.onAuthStateChange((ev,s)=>{const had=!!SESSION;SESSION=s;if(ev==="PASSWORD_RECOVERY"){setTimeout(()=>showSignIn("newpw"),300);return}if(had!==!!s)location.reload()});
+  SB.auth.onAuthStateChange((ev,s)=>{const had=!!SESSION;SESSION=s;if(AUTH_HOLD)return;if(ev==="PASSWORD_RECOVERY"){setTimeout(()=>showSignIn("newpw"),300);return}if(had!==!!s)location.reload()});
   if(!SESSION){MODE="signedout";BACKEND={downloads:DOWNLOADS};return}
   MODE="crew";BACKEND={db:makeRemoteDB(),assets:PHOTOS,user:{id:async()=>SESSION.user.id,name:SESSION.user.email},downloads:DOWNLOADS};
 }
@@ -982,10 +982,11 @@ function showSignIn(tab="in"){
         <div class="err" id="auErr" role="alert"></div>
         <div class="acts"><button class="btn pri" type="submit" id="auB">Sign in</button><button class="linkbtn" type="button" data-tab="forgot">Forgot password?</button></div></form>
         <p>New to the crew? <button class="linkbtn" type="button" data-tab="up">Create an account</button></p>`},
-    up:{h:"Create account",body:`<p>Use the email your crew lead added to the crew list. You'll confirm it once by email, then just sign in with your password.</p>
+    up:{h:"Create account",body:`<p>You'll need your crew's join code. Ask your crew lead for it.</p>
         <form id="auF" novalidate>
         <label class="fld">Email<input id="auE" type="email" autocomplete="username" inputmode="email" required></label>
         <label class="fld">Password<input id="auP" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters. Your phone can save it for you.</span></label>
+        <label class="fld">Crew join code<input id="auC" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
         <div class="err" id="auErr" role="alert"></div>
         <div class="acts"><button class="btn pri" type="submit" id="auB">Create account</button></div></form>
         <p>Already have one? <button class="linkbtn" type="button" data-tab="in">Sign in</button></p>`},
@@ -993,22 +994,35 @@ function showSignIn(tab="in"){
         <form id="auF" novalidate><label class="fld">Email<input id="auE" type="email" autocomplete="username" inputmode="email" required></label>
         <div class="err" id="auErr" role="alert"></div>
         <div class="acts"><button class="btn pri" type="submit" id="auB">Send reset link</button><button class="linkbtn" type="button" data-tab="in">Back to sign in</button></div></form>`},
+    join:{h:"Join your crew",body:`<p>You're signed in, but not on a crew yet. Enter your crew's join code to see and add points.</p>
+        <form id="auF" novalidate><label class="fld">Crew join code<input id="auC" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
+        <div class="err" id="auErr" role="alert">${(()=>{try{const m=sessionStorage.getItem("bl-badcode");sessionStorage.removeItem("bl-badcode");return m?"Your account was made, but that join code didn't match. Check it with your crew lead and enter it here.":""}catch{return ""}})()}</div>
+        <div class="acts"><button class="btn pri" type="submit" id="auB">Join crew</button><button class="linkbtn" type="button" data-acct="out">Sign out</button></div></form>`},
     newpw:{h:"Set a new password",body:`<form id="auF" novalidate>
         <label class="fld">New password<input id="auP" type="password" autocomplete="new-password" minlength="8" required></label>
         <div class="err" id="auErr" role="alert"></div>
         <div class="acts"><button class="btn pri" type="submit" id="auB">Save password</button></div></form>`}}[tab];
   const s=sheet(`<div class="shead"><h2>${T.h}</h2><button class="x" data-close aria-label="Close">×</button></div>${T.body}`);
   s.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>showSignIn(b.dataset.tab));
+  s.querySelectorAll("[data-acct=out]").forEach(b=>b.onclick=()=>SB.auth.signOut());
   const done=html=>{s.querySelector(".sheet").innerHTML=`<div class="shead"><h2>Check your email</h2><button class="x" aria-label="Close" id="auX">×</button></div>${html}`;$("#auX").onclick=closeSheet};
   s.querySelector("#auF").onsubmit=async e=>{e.preventDefault();
     const err=$("#auErr"),btn=$("#auB"),em=$("#auE")?.value.trim().toLowerCase(),pw=$("#auP")?.value||"";err.textContent="";
-    if(tab!=="newpw"&&!/^\S+@\S+\.\S+$/.test(em)){err.textContent="Enter a full email address.";return}
+    const code=$("#auC")?.value.trim()||"";
+    if(tab!=="newpw"&&tab!=="join"&&!/^\S+@\S+\.\S+$/.test(em)){err.textContent="Enter a full email address.";return}
+    if((tab==="up"||tab==="join")&&!code){err.textContent="Enter your crew's join code.";return}
     if((tab==="up"||tab==="newpw")&&pw.length<8){err.textContent="Use a password with at least 8 characters.";return}
     if(tab==="in"&&!pw){err.textContent="Enter your password.";return}
     const label=btn.textContent;btn.disabled=true;btn.textContent="One moment…";
     let r;
     if(tab==="in")r=await SB.auth.signInWithPassword({email:em,password:pw});
-    else if(tab==="up")r=await SB.auth.signUp({email:em,password:pw,options:{emailRedirectTo:home}});
+    else if(tab==="join"){r=await SB.rpc("join_crew",{code});if(!r.error&&r.data===true){location.reload();return}
+      if(!r.error){err.textContent="That join code didn't match. Check it with your crew lead.";btn.disabled=false;btn.textContent=label;return}}
+    else if(tab==="up"){AUTH_HOLD=true;r=await SB.auth.signUp({email:em,password:pw,options:{emailRedirectTo:home}});
+      if(!r.error&&r.data?.session){const j=await SB.rpc("join_crew",{code});
+        if(j.error||j.data!==true){try{sessionStorage.setItem("bl-badcode","1")}catch{}}
+        location.reload();return}
+      AUTH_HOLD=false}
     else if(tab==="forgot")r=await SB.auth.resetPasswordForEmail(em,{redirectTo:home});
     else r=await SB.auth.updateUser({password:pw});
     if(r.error){err.textContent=authMsg(r.error);btn.disabled=false;btn.textContent=label;return}
@@ -1019,6 +1033,7 @@ function showSignIn(tab="in"){
   };
 }
 const RECOVERY=/type=recovery/.test(location.hash);
+let AUTH_HOLD=false;
 
 function acctHTML(){
   if(MODE==="local")return `Points are saved on this phone only. Connect a database to share them with your crew.`;
@@ -1262,6 +1277,7 @@ if(view==="3d")syncSpin();
   await startBackend();
   db=BACKEND.db||null;assets=BACKEND.assets||null;user=BACKEND.user||null;
   renderAcct();loadHand();
+  if(MODE==="crew"&&!RECOVERY){SB.rpc("is_crew").then(({data,error})=>{if(!error&&data===false)showSignIn("join")})}
   if(RECOVERY&&SESSION){history.replaceState(null,"",location.pathname);showSignIn("newpw")}
   if(MODE==="signedout"){loaded=true;render();showSignIn();return}
   db.collection("points").onSnapshot(snap=>{
